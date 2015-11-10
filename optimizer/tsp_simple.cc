@@ -47,8 +47,6 @@ void TSPTWSolver(const TSPTWDataDT & data) {
   routing.AddDimension(NewPermanentCallback(&data, &TSPTWDataDT::TimePlusServiceTime),
     horizon, horizon, true, "time");
 
-  routing.GetMutableDimension("time")->SetSpanCostCoefficientForAllVehicles(5);
-
   //  Setting time windows
   for (RoutingModel::NodeIndex i(1); i < size_matrix - 1; ++i) {
     int64 index = routing.NodeToIndex(i);
