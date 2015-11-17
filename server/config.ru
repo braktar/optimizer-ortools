@@ -22,6 +22,7 @@ configure do
   set :server, :puma
   set :optimizer_vroom_exec, '../optimizer_vroom/vroom'
   set :optimizer_or_tools_exec, '../optimizer_or-tools/tsp_simple'
+  set :optimizer_jsprit_exec, '../workspace/jsprit.jar'
   set :optimizer_tmp_dir, Dir.tmpdir
   set :optimizer_default_time, 30000
   set :optimizer_soft_upper_bound, 3

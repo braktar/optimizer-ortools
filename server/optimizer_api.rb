@@ -42,6 +42,7 @@ end
 def optimize(capacity, matrix, time_window, rest_window, optimize_time = nil, soft_upper_bound = nil)
   @exec_vroom = settings.optimizer_vroom_exec
   @exec_or_tools = settings.optimizer_or_tools_exec
+  @exec_jsprit = settings.optimizer_jsprit_exec
   @tmp_dir = settings.optimizer_tmp_dir
   @time = optimize_time || settings.optimizer_default_time
   @soft_upper_bound = soft_upper_bound || settings.optimizer_soft_upper_bound
@@ -84,30 +85,63 @@ def optimize(capacity, matrix, time_window, rest_window, optimize_time = nil, so
         result.rotate(index).collect{ |i| i - 1 }
       end
     else
-      # So, hard work to do, run OR-Tools
+      if true  #Add constraint to select Jsprit
+	      # hard work to do for vroom, run OR-Tools
 
-      input.write(matrix.size)
-      input.write("\n")
-      input.write(rest_window.size)
-      input.write("\n")
-      input.write(matrix.collect{ |a| a.collect{ |b| b.join(" ") }.join(" ") }.join("\n"))
-      input.write("\n")
-      input.write((time_window + [[0, 2147483647, 0]]).collect{ |a| [a[0] ? a[0]:0, a[1]? a[1]:2147483647, a[2]].join(" ") }.join("\n"))
-      input.write("\n")
-      input.write(rest_window.collect{ |a| [a[0] ? a[0]:0, a[1]? a[1]:2147483647, a[2]].join(" ") }.join("\n"))
-      input.write("\n")
+	      input.write(matrix.size)
+	      input.write("\n")
+	      input.write(rest_window.size)
+	      input.write("\n")
+	      input.write(matrix.collect{ |a| a.collect{ |b| b.join(" ") }.join(" ") }.join("\n"))
+	      input.write("\n")
+	      input.write((time_window + [[0, 2147483647, 0]]).collect{ |a| [a[0] ? a[0]:0, a[1]? a[1]:2147483647, a[2]].join(" ") }.join("\n"))
+	      input.write("\n")
+	      input.write(rest_window.collect{ |a| [a[0] ? a[0]:0, a[1]? a[1]:2147483647, a[2]].join(" ") }.join("\n"))
+	      input.write("\n")
 
-      input.close
+	      input.close
 
-      cmd = "#{@exec_or_tools} -time_limit_in_ms #{@time} -soft_upper_bound #{@soft_upper_bound} -instance_file '#{input.path}' > '#{output.path}'"
-      puts cmd
-      system(cmd)
-      puts $?.exitstatus
-      if $?.exitstatus == 0
-        result = File.read(output.path)
-        result = result.split("\n")[-1]
-        puts result.inspect
-        result.split(' ').collect{ |i| Integer(i) }
+	      cmd = "#{@exec_or_tools} -time_limit_in_ms #{@time} -soft_upper_bound #{@soft_upper_bound} -instance_file '#{input.path}' > '#{output.path}'"
+	      puts cmd
+	      system(cmd)
+	      puts $?.exitstatus
+	      if $?.exitstatus == 0
+	        result = File.read(output.path)
+	        result = result.split("\n")[1..-1]
+	        #puts result.inspect
+	        result.collect!{ |i| i.split(' ').collect{ |j| Integer(j) } }
+			puts result.inspect
+			result
+	      end
+
+	  else
+		  #Try Jsprit
+
+		  input.write(matrix.size)
+	      input.write("\n")
+	      input.write(rest_window.size)
+	      input.write("\n")
+	      input.write(matrix.collect{ |a| a.join(" ") }.join("\n"))
+	      input.write("\n")
+	      input.write((time_window + [[0, 2147483647, 0]]).collect{ |a| [a[0] ? a[0]:0, a[1]? a[1]:2147483647, a[2]].join(" ") }.join("\n"))
+	      input.write("\n")
+	      input.write(rest_window.collect{ |a| [a[0] ? a[0]:0, a[1]? a[1]:2147483647, a[2]].join(" ") }.join("\n"))
+	      input.write("\n")
+
+	      input.close
+
+	      cmd = "java -jar #{@exec_jsprit} -time_limit_in_ms #{@time} -soft_upper_bound #{@soft_upper_bound} -instance_file '#{input.path}' > '#{output.path}'"
+	      puts cmd
+	      system(cmd)
+	      puts $?.exitstatus
+	      if $?.exitstatus == 0
+	        result = File.read(output.path)
+	        result = result.split("\n")[1..-1]
+	        #puts result.inspect
+	        result.collect!{ |i| i.split(' ').collect{ |j| Integer(j) } }
+			puts result.inspect
+			result
+		  end
       end
     end
   ensure
