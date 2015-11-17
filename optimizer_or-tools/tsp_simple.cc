@@ -37,6 +37,7 @@ void TSPTWSolver(const TSPTWDataDT & data) {
   const int size = data.Size();
   const int size_matrix = data.SizeMatrix();
   const int size_rest = data.SizeRest();
+  const int64 fixedVehicleCost = 500;
 
   std::vector<std::pair<RoutingModel::NodeIndex, RoutingModel::NodeIndex>> *start_ends = new std::vector<std::pair<RoutingModel::NodeIndex, RoutingModel::NodeIndex>>(1);
   (*start_ends)[0] = std::make_pair(data.Start(), data.Stop());
@@ -46,6 +47,8 @@ void TSPTWSolver(const TSPTWDataDT & data) {
   const int64 horizon = data.Horizon();
   routing.AddDimension(NewPermanentCallback(&data, &TSPTWDataDT::TimePlusServiceTime),
     horizon, horizon, true, "time");
+
+  routing.SetFixedCostOfAllVehicles(fixedVehicleCost);
 
   //  Setting time windows
   for (RoutingModel::NodeIndex i(1); i < size_matrix - 1; ++i) {
@@ -116,6 +119,7 @@ void TSPTWSolver(const TSPTWDataDT & data) {
   // routing.set_first_solution_strategy(RoutingModel::RoutingStrategy::ROUTING_EVALUATOR_STRATEGY);
   // routing.set_first_solution_strategy(RoutingModel::RoutingStrategy::ROUTING_ALL_UNPERFORMED);
   // routing.set_first_solution_strategy(RoutingModel::RoutingStrategy::ROUTING_BEST_INSERTION);
+  // routing.set_first_solution_strategy(RoutingModel::RoutingStrategy::ROUTING_GLOBAL_CHEAPEST_INSERTION);
 
   // routing.set_metaheuristic(RoutingModel::RoutingMetaheuristic::ROUTING_GREEDY_DESCENT);
   routing.set_metaheuristic(RoutingModel::RoutingMetaheuristic::ROUTING_GUIDED_LOCAL_SEARCH);
