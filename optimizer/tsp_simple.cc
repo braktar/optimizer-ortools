@@ -29,6 +29,7 @@
 
 DEFINE_int64(time_limit_in_ms, 2000, "Time limit in ms, 0 means no limit.");
 DEFINE_int64(soft_upper_bound, 3, "Soft upper bound multiplicator, 0 means hard limit.");
+DEFINE_int64(penalty_cost, 1000000, "Force constraints");
 
 namespace operations_research {
 
@@ -37,6 +38,7 @@ void TSPTWSolver(const TSPTWDataDT & data) {
   const int size = data.Size();
   const int size_matrix = data.SizeMatrix();
   const int size_rest = data.SizeRest();
+  const int size_tws = data.SizeTWS();
 
   std::vector<std::pair<RoutingModel::NodeIndex, RoutingModel::NodeIndex>> *start_ends = new std::vector<std::pair<RoutingModel::NodeIndex, RoutingModel::NodeIndex>>(1);
   (*start_ends)[0] = std::make_pair(data.Start(), data.Stop());
@@ -46,11 +48,10 @@ void TSPTWSolver(const TSPTWDataDT & data) {
   const int64 horizon = data.Horizon();
   routing.AddDimension(NewPermanentCallback(&data, &TSPTWDataDT::TimePlusServiceTime),
     horizon, horizon, true, "time");
-
   routing.GetMutableDimension("time")->SetSpanCostCoefficientForAllVehicles(5);
-
+  routing.GetMutableDimension("time")->SetEndCumulVarSoftUpperBound(0, horizon, 10000000);
   //  Setting time windows
-  for (RoutingModel::NodeIndex i(1); i < size_matrix - 1; ++i) {
+  for (RoutingModel::NodeIndex i(1); i < size_tws; ++i) {
     int64 index = routing.NodeToIndex(i);
     IntVar* const cumul_var = routing.CumulVar(index, "time");
     int64 const ready = data.ReadyTime(i);
@@ -60,8 +61,8 @@ void TSPTWSolver(const TSPTWDataDT & data) {
       std::vector<RoutingModel::NodeIndex> *vect = new std::vector<RoutingModel::NodeIndex>(1);
       (*vect)[0] = i;
       routing.AddDisjunction(*vect, 0); // skip node for free
-        cumul_var->SetMin(0);
-        cumul_var->SetMax(0);
+      cumul_var->SetMin(0);
+      cumul_var->SetMax(0);
     } else if (ready > 0 || due > 0) {
       if (ready > 0) {
         cumul_var->SetMin(ready);
@@ -70,25 +71,22 @@ void TSPTWSolver(const TSPTWDataDT & data) {
         if (FLAGS_soft_upper_bound > 0) {
           routing.SetCumulVarSoftUpperBound(i, "time", due, FLAGS_soft_upper_bound);
         } else {
-          routing.SetCumulVarSoftUpperBound(i, "time", due, 10000000);
+          routing.SetCumulVarSoftUpperBound(i, "time", due, FLAGS_penalty_cost);
         }
       }
-
-      std::vector<RoutingModel::NodeIndex> *vect = new std::vector<RoutingModel::NodeIndex>(1);
-      (*vect)[0] = i;
-      routing.AddDisjunction(*vect, 100000);
-    } else {
-      std::vector<RoutingModel::NodeIndex> *vect = new std::vector<RoutingModel::NodeIndex>(1);
-      (*vect)[0] = i;
-      routing.AddDisjunction(*vect);
     }
+  }
+
+  for(int j = 1; j < data.SizeMatrix()-1 ; ++j){
+    std::vector<RoutingModel::NodeIndex> *vect = new std::vector<RoutingModel::NodeIndex>(data.NumberTimeWindows(j));
+    vect = data.VectorNode(j);
+    routing.AddDisjunction(*vect, FLAGS_penalty_cost);
   }
 
   for (int n = 0; n < size_rest; ++n) {
     std::vector<RoutingModel::NodeIndex> *vect = new std::vector<RoutingModel::NodeIndex>(1);
-    RoutingModel::NodeIndex rest(size_matrix + n);
+    RoutingModel::NodeIndex rest(size_tws + n);
     (*vect)[0] = rest;
-
     int64 index = routing.NodeToIndex(rest);
     IntVar* const cumul_var = routing.CumulVar(index, "time");
     int64 const ready = data.ReadyTime(rest);
@@ -101,10 +99,10 @@ void TSPTWSolver(const TSPTWDataDT & data) {
       if (FLAGS_soft_upper_bound > 0) {
         routing.SetCumulVarSoftUpperBound(rest, "time", due, FLAGS_soft_upper_bound);
       } else {
-        routing.SetCumulVarSoftUpperBound(rest, "time", due, 10000000);
+        routing.SetCumulVarSoftUpperBound(rest, "time", due, FLAGS_penalty_cost);
       }
     }
-    routing.AddDisjunction(*vect);
+    routing.AddDisjunction(*vect,FLAGS_penalty_cost);
   }
 
   //  Search strategy
@@ -114,7 +112,7 @@ void TSPTWSolver(const TSPTWDataDT & data) {
   // routing.set_first_solution_strategy(RoutingModel::RoutingStrategy::ROUTING_PATH_CHEAPEST_ARC);
   // routing.set_first_solution_strategy(RoutingModel::RoutingStrategy::ROUTING_EVALUATOR_STRATEGY);
   // routing.set_first_solution_strategy(RoutingModel::RoutingStrategy::ROUTING_ALL_UNPERFORMED);
-  // routing.set_first_solution_strategy(RoutingModel::RoutingStrategy::ROUTING_BEST_INSERTION);
+  routing.set_first_solution_strategy(RoutingModel::RoutingStrategy::ROUTING_BEST_INSERTION);
 
   // routing.set_metaheuristic(RoutingModel::RoutingMetaheuristic::ROUTING_GREEDY_DESCENT);
   routing.set_metaheuristic(RoutingModel::RoutingMetaheuristic::ROUTING_GUIDED_LOCAL_SEARCH);

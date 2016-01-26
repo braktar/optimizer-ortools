@@ -20,11 +20,11 @@ class APITest < MiniTest::Unit::TestCase
       [[1, 1], [1, 1], [0, 0]]
     ]
     time_window = [
-      [0, 2147483647, 1],
-      [0, 2147483647, 1]
+      [0, 0, 2147483647, 1],
+      [1, 0, 2147483647, 1]
     ]
     rest_window = [
-      [0, 1, 1]
+      [0, 0, 1, 1]
     ]
     post '/0.1/optimize_tsptw', data: {matrix: matrix, time_window: time_window, rest_window: rest_window, capacity: [], optimize_time: 500, soft_upper_bound: 3}.to_json
     assert last_response.ok?

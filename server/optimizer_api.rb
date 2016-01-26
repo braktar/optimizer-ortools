@@ -55,11 +55,13 @@ def optimize(capacity, matrix, time_window, rest_window, optimize_time = nil, so
     input.write("\n")
     input.write(rest_window.size)
     input.write("\n")
+    input.write(time_window.size+1)
+    input.write("\n")
     input.write(matrix.collect{ |a| a.collect{ |b| b.join(" ") }.join(" ") }.join("\n"))
     input.write("\n")
-    input.write((time_window + [[0, 2147483647, 0]]).collect{ |a| [a[0] ? a[0]:0, a[1]? a[1]:2147483647, a[2]].join(" ") }.join("\n"))
+    input.write((time_window + [[0, 0, 2147483647, 0]]).collect{ |a| [a[0], a[1] ? a[1]:0, a[2]? a[2]:2147483647, a[3]].join(" ") }.join("\n"))
     input.write("\n")
-    input.write(rest_window.collect{ |a| [a[0] ? a[0]:0, a[1]? a[1]:2147483647, a[2]].join(" ") }.join("\n"))
+    input.write(rest_window.collect{ |a| [a[0], a[1] ? a[1]:0, a[2]? a[2]:2147483647, a[3]].join(" ") }.join("\n"))
     input.write("\n")
 
     input.close
