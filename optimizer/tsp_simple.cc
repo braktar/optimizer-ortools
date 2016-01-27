@@ -48,10 +48,12 @@ void TSPTWSolver(const TSPTWDataDT & data) {
   const int64 horizon = data.Horizon();
   routing.AddDimension(NewPermanentCallback(&data, &TSPTWDataDT::TimePlusServiceTime),
     horizon, horizon, true, "time");
+
   routing.GetMutableDimension("time")->SetSpanCostCoefficientForAllVehicles(5);
   routing.GetMutableDimension("time")->SetEndCumulVarSoftUpperBound(0, horizon, 10000000);
+
   //  Setting time windows
-  for (RoutingModel::NodeIndex i(1); i < size_tws; ++i) {
+  for (RoutingModel::NodeIndex i(1); i < size_tws -1 ; ++i) {
     int64 index = routing.NodeToIndex(i);
     IntVar* const cumul_var = routing.CumulVar(index, "time");
     int64 const ready = data.ReadyTime(i);
@@ -83,7 +85,7 @@ void TSPTWSolver(const TSPTWDataDT & data) {
     routing.AddDisjunction(*vect, FLAGS_penalty_cost);
   }
 
-  for (int n = 0; n < size_rest; ++n) {
+  /*for (int n = 0; n < size_rest; ++n) {
     std::vector<RoutingModel::NodeIndex> *vect = new std::vector<RoutingModel::NodeIndex>(1);
     RoutingModel::NodeIndex rest(size_tws + n);
     (*vect)[0] = rest;
@@ -103,7 +105,7 @@ void TSPTWSolver(const TSPTWDataDT & data) {
       }
     }
     routing.AddDisjunction(*vect,FLAGS_penalty_cost);
-  }
+  }*/
 
   //  Search strategy
   // routing.set_first_solution_strategy(RoutingModel::ROUTING_DEFAULT_STRATEGY);
@@ -127,8 +129,30 @@ void TSPTWSolver(const TSPTWDataDT & data) {
 
   Solver *solver = routing.solver();
 
-  const Assignment* solution = routing.Solve(NULL);
+  std::vector<std::vector<IntVar*> > tBreak;
+  for (int n = 0; n < size_rest; ++n) {
+    RoutingModel::NodeIndex rest(size_tws+n);
+    int64 const ready = data.ReadyTime(rest);
+    int64 const due = data.DueTime(rest);
+    int64 const service = data.ServiceTime(rest);
+    // Setting Rest
+    std::vector<IntVar*> isBreak;
 
+    for (RoutingModel::NodeIndex i(0); i < size_tws -1; ++i){
+      int64 index = routing.NodeToIndex(i);
+      IntVar* const var = solver->MakeBoolVar("break"+ std::to_string(index) );
+      routing.AddToAssignment(var);
+      solver->AddConstraint(solver->MakeLessOrEqual(var, routing.ActiveVar(index) ));
+      solver->AddConstraint(solver->MakeGreaterOrEqual(routing.CumulVar(index,"time"), solver->MakeProd(var, ready)));
+      solver->AddConstraint(solver->MakeLessOrEqual(routing.CumulVar(index,"time"), solver->MakeSum(solver->MakeProd(var, due), solver->MakeProd(solver->MakeDifference(1,var),214748364))));
+      solver->AddConstraint(solver->MakeGreaterOrEqual(routing.SlackVar(index,"time"), solver->MakeProd(var,service)));
+      isBreak.push_back(var);
+    }
+    solver->AddConstraint(solver->MakeEquality(solver->MakeSum(isBreak),1));
+    tBreak.push_back(isBreak);
+  }
+
+  const Assignment* solution = routing.Solve(NULL);
   if (solution != NULL) {
     std::cout << "Cost: " << solution->ObjectiveValue() << std::endl;
     TSPTWSolution sol(data, &routing, solution);
@@ -136,6 +160,12 @@ void TSPTWSolver(const TSPTWDataDT & data) {
       for (int64 index = routing.Start(route_nbr); !routing.IsEnd(index); index = solution->Value(routing.NextVar(index))) {
         RoutingModel::NodeIndex nodeIndex = routing.IndexToNode(index);
         std::cout << nodeIndex << " ";
+        for (int n = 0; n < size_rest; ++n) {
+          int64 v = solution->Value(tBreak.at(n).at(index));
+          if(v == 1){
+            std::cout << size_tws + n << " ";
+          }
+        }
       }
       std::cout << routing.IndexToNode(routing.End(route_nbr)) << std::endl;
     }

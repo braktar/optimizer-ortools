@@ -219,7 +219,7 @@ void TSPTWDataDT::LoadInstance(const std::string & filename) {
     LOG(ERROR) << "Could not open TSPTW file " << filename;
   }
   // Problem size
-  size_ = size_tws_ + size_rest_;
+  size_ = size_tws_; // + size_rest_
 
   // Compute horizon
   for (int32 i = 0; i < size_matrix_ + size_rest_; ++i) {
@@ -257,10 +257,10 @@ void TSPTWDataDT::ProcessNewLine(char* const line) {
   }
   else if (line_number_ == 3 && words.size() == 1) {
     size_tws_ = atoi32(words[0]);
-    CreateRoutingData(size_tws_ + size_rest_); // Artificial problem size
+    CreateRoutingData(size_tws_); // Artificial problem size // + size_rest_
     // Matrix default values
-    for (int64 i=0; i < size_tws_ + size_rest_; ++i) {
-      for (int64 j=0; j < size_tws_ + size_rest_; ++j) {
+    for (int64 i=0; i < size_tws_; ++i) {  // + size_rest_
+      for (int64 j=0; j < size_tws_; ++j) { // + size_rest_
         SetMatrix(i, j) = 0;
         SetTimeMatrix(i, j) = 0;
       }
@@ -287,7 +287,7 @@ void TSPTWDataDT::ProcessNewLine(char* const line) {
       while(parseIndex_[i] != index)
         ++i;
       index = i;
-      tsptw_tw_clients_[index] =  tsptw_tw_clients_[index]+1;
+      tsptw_tw_clients_[index] =  ++tsptw_tw_clients_[index];
     }
     tsptw_clients_.push_back(TSPTWClient(index,
                                          atof(words[1].c_str()),

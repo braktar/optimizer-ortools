@@ -31,7 +31,7 @@ class Disjunc < MiniTest::Unit::TestCase
     assert last_response.ok?
     json = JSON.parse(last_response.body)
     assert_equal 'ok', json['status']
-    assert_equal 6, json['optim'].collect{ |i| Integer(i) }.size
+    assert_equal 6, json['optim'].size
     assert_equal 0, json['optim'].first
     assert_equal (matrix.size-1), json['optim'].last
   end
@@ -121,7 +121,7 @@ class Disjunc < MiniTest::Unit::TestCase
     json = JSON.parse(last_response.body)
     puts json.inspect
     assert_equal 'ok', json['status']
-    assert_equal 6, json['optim'].collect{ |i| Integer(i) }.size
+    assert_equal 6, json['optim'].size
     assert_equal 0, json['optim'].first
     assert_equal (matrix.size), json['optim'].last
   end
@@ -140,21 +140,21 @@ class Disjunc < MiniTest::Unit::TestCase
     time_window = [
       [0, 0, 2147483647, 1],
       [1, 0, 2147483647, 1],
-      [2, 0, 100, 1],
-      [2, 200, 300, 1],
+      [2, 0, 500, 1],
+      [2, 700, 1800, 1],
       [3, 0, 2147483647, 1],
       [4, 0, 2147483647, 1]
     ]
 
     rest_window = [
-      [0, 600, 1200, 1200]
+      [0, 0, 2147483647, 120]
     ]
     post '/0.1/optimize_tsptw', data: {matrix: matrix, time_window: time_window, rest_window: rest_window, capacity: [], optimize_time: 500, soft_upper_bound: 3}.to_json
     assert last_response.ok?
     json = JSON.parse(last_response.body)
     puts json.inspect
     assert_equal 'ok', json['status']
-    assert_equal 7, json['optim'].collect{ |i| Integer(i) }.size
+    assert_equal 7, json['optim'].size
     assert_equal 0, json['optim'].first
     assert_equal (matrix.size), json['optim'].last
   end
