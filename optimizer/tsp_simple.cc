@@ -30,6 +30,11 @@
 DEFINE_int64(time_limit_in_ms, 2000, "Time limit in ms, 0 means no limit.");
 DEFINE_int64(soft_upper_bound, 3, "Soft upper bound multiplicator, 0 means hard limit.");
 DEFINE_int64(penalty_cost, 1000000, "Force constraints");
+DEFINE_int64(linear_penalty_cost, 50, "Force Constraints");
+
+const char* kCapacity = "capacity";
+const char* kTime = "time";
+const char* kDistance = "distance";
 
 namespace operations_research {
 
@@ -38,24 +43,74 @@ void TSPTWSolver(const TSPTWDataDT & data) {
   const int size = data.Size();
   const int size_matrix = data.SizeMatrix();
   const int size_rest = data.SizeRest();
-  const int size_tws = data.SizeTWS();
+  const int size_tws = data.SizeTimeWindows();
 
-  std::vector<std::pair<RoutingModel::NodeIndex, RoutingModel::NodeIndex>> *start_ends = new std::vector<std::pair<RoutingModel::NodeIndex, RoutingModel::NodeIndex>>(1);
-  (*start_ends)[0] = std::make_pair(data.Start(), data.Stop());
-  RoutingModel routing(size, 1, *start_ends);
+  // Définition des départs et arrivées par véhicule
+  std::vector<std::pair<RoutingModel::NodeIndex, RoutingModel::NodeIndex>> *start_ends = new std::vector<std::pair<RoutingModel::NodeIndex, RoutingModel::NodeIndex>>(data.SizeVehicle());
+  for( int i = 0; i < data.SizeVehicle(); ++i ) {
+    (*start_ends)[i] = std::make_pair(data.VehicleStart(i), data.VehicleEnd(i));
+  }
+  RoutingModel routing(size, data.SizeVehicle(), *start_ends);
   routing.SetCost(NewPermanentCallback(&data, &TSPTWDataDT::Distance));
 
-  const int64 horizon = data.Horizon();
-  routing.AddDimension(NewPermanentCallback(&data, &TSPTWDataDT::TimePlusServiceTime),
-    horizon, horizon, true, "time");
 
-  routing.GetMutableDimension("time")->SetSpanCostCoefficientForAllVehicles(5);
-  routing.GetMutableDimension("time")->SetEndCumulVarSoftUpperBound(0, horizon, 10000000);
+  const int64 kNullCapacitySlack = 0;
+  const int64 horizon = data.Horizon();
+
+  routing.AddDimension(NewPermanentCallback(&data, &TSPTWDataDT::TimePlusServiceTime),
+    horizon, horizon, true, kTime);
+
+  routing.AddDimension(NewPermanentCallback(&data, &TSPTWDataDT::Distance),
+    kNullCapacitySlack, std::numeric_limits<int>::max(), true, kDistance);
+
+  if(data.SizeCapacities() > 0){
+    routing.AddDimension(NewPermanentCallback(&data, &TSPTWDataDT::Demand0),
+      kNullCapacitySlack, data.MaxVehicleCapacity(0), true, kCapacity+std::to_string(0));
+  }
+  if(data.SizeCapacities() > 1){
+    routing.AddDimension(NewPermanentCallback(&data, &TSPTWDataDT::Demand1),
+      kNullCapacitySlack, data.MaxVehicleCapacity(1), true, kCapacity+std::to_string(1));
+  }
+  if(data.SizeCapacities() > 2){
+    routing.AddDimension(NewPermanentCallback(&data, &TSPTWDataDT::Demand2),
+      kNullCapacitySlack, data.MaxVehicleCapacity(2), true, kCapacity+std::to_string(2));
+  }
+
+
+  routing.GetMutableDimension(kTime)->SetSpanCostCoefficientForAllVehicles(5);
+  routing.GetMutableDimension(kTime)->SetEndCumulVarSoftUpperBound(0, horizon, 10000000);
+
+  // Setting Vehicles
+  for(int route = 0; route < data.SizeVehicle(); ++route){
+    routing.SetFixedCostOfVehicle(data.FixedCostVehicle(route),route);
+
+    //routing.AddVariableMinimizedByFinalizer(routing.GetMutableDimension(kTime)->CumulVar(route));
+    //routing.GetMutableDimension(kTime)->CumulVar(routing.Start(route))->SetMin(data.ReadyTimeVehicle(route));
+    //routing.GetMutableDimension(kTime)->CumulVar(routing.End(route))->SetMax(data.FinishTimeVehicle(route));
+
+    routing.GetMutableDimension(kTime)->SetStartCumulVarSoftLowerBound(route, data.ReadyTimeVehicle(route),FLAGS_linear_penalty_cost);
+    routing.GetMutableDimension(kTime)->SetEndCumulVarSoftUpperBound(route, data.FinishTimeVehicle(route),FLAGS_linear_penalty_cost);
+
+    //routing.GetMutableDimension(kTime)->SetSpanUpperBoundForVehicle(data.WorkEndVehicle(route),route);
+
+    // Objective : Minimizing cost of distance and time
+    routing.GetMutableDimension(kDistance)->SetSpanCostCoefficientForVehicle(data.VehicleDistanceCost(route), route);
+    routing.GetMutableDimension(kTime)->SetSpanCostCoefficientForVehicle(data.VehicleTimeCost(route), route);
+
+    if(data.SizeCapacities() > 0)
+      routing.GetMutableDimension(kCapacity+std::to_string(0))->SetEndCumulVarSoftUpperBound(route, data.Capacity0Vehicle(route), FLAGS_penalty_cost);
+    if(data.SizeCapacities() > 1)
+      routing.GetMutableDimension(kCapacity+std::to_string(1))->SetEndCumulVarSoftUpperBound(route, data.Capacity1Vehicle(route), FLAGS_penalty_cost);
+    if(data.SizeCapacities() > 2)
+      routing.GetMutableDimension(kCapacity+std::to_string(2))->SetEndCumulVarSoftUpperBound(route, data.Capacity2Vehicle(route), FLAGS_penalty_cost);
+    /*if( FLAGS_has_switch_skills && route%2 == 0 )
+      data.SwitchSkills(route);*/
+  }
 
   //  Setting time windows
   for (RoutingModel::NodeIndex i(1); i < size_tws -1 ; ++i) {
     int64 index = routing.NodeToIndex(i);
-    IntVar* const cumul_var = routing.CumulVar(index, "time");
+    IntVar* const cumul_var = routing.CumulVar(index, kTime);
     int64 const ready = data.ReadyTime(i);
     int64 const due = data.DueTime(i);
 
@@ -71,9 +126,9 @@ void TSPTWSolver(const TSPTWDataDT & data) {
       }
       if (due > 0 && due < 2147483647) {
         if (FLAGS_soft_upper_bound > 0) {
-          routing.SetCumulVarSoftUpperBound(i, "time", due, FLAGS_soft_upper_bound);
+          routing.SetCumulVarSoftUpperBound(i, kTime, due, FLAGS_soft_upper_bound);
         } else {
-          routing.SetCumulVarSoftUpperBound(i, "time", due, FLAGS_penalty_cost);
+          routing.SetCumulVarSoftUpperBound(i, kTime, due, FLAGS_penalty_cost);
         }
       }
     }
@@ -90,7 +145,7 @@ void TSPTWSolver(const TSPTWDataDT & data) {
     RoutingModel::NodeIndex rest(size_tws + n);
     (*vect)[0] = rest;
     int64 index = routing.NodeToIndex(rest);
-    IntVar* const cumul_var = routing.CumulVar(index, "time");
+    IntVar* const cumul_var = routing.CumulVar(index, kTime);
     int64 const ready = data.ReadyTime(rest);
     int64 const due = data.DueTime(rest);
 
@@ -99,9 +154,9 @@ void TSPTWSolver(const TSPTWDataDT & data) {
     }
     if (due > 0 && due < 2147483647) {
       if (FLAGS_soft_upper_bound > 0) {
-        routing.SetCumulVarSoftUpperBound(rest, "time", due, FLAGS_soft_upper_bound);
+        routing.SetCumulVarSoftUpperBound(rest, kTime, due, FLAGS_soft_upper_bound);
       } else {
-        routing.SetCumulVarSoftUpperBound(rest, "time", due, FLAGS_penalty_cost);
+        routing.SetCumulVarSoftUpperBound(rest, kTime, due, FLAGS_penalty_cost);
       }
     }
     routing.AddDisjunction(*vect,FLAGS_penalty_cost);
@@ -143,9 +198,9 @@ void TSPTWSolver(const TSPTWDataDT & data) {
       IntVar* const var = solver->MakeBoolVar("break"+ std::to_string(index) );
       routing.AddToAssignment(var);
       solver->AddConstraint(solver->MakeLessOrEqual(var, routing.ActiveVar(index) ));
-      solver->AddConstraint(solver->MakeGreaterOrEqual(routing.CumulVar(index,"time"), solver->MakeProd(var, ready)));
-      solver->AddConstraint(solver->MakeLessOrEqual(routing.CumulVar(index,"time"), solver->MakeSum(solver->MakeProd(var, due), solver->MakeProd(solver->MakeDifference(1,var),214748364))));
-      solver->AddConstraint(solver->MakeGreaterOrEqual(routing.SlackVar(index,"time"), solver->MakeProd(var,service)));
+      solver->AddConstraint(solver->MakeGreaterOrEqual(routing.CumulVar(index,kTime), solver->MakeProd(var, ready)));
+      solver->AddConstraint(solver->MakeLessOrEqual(routing.CumulVar(index,kTime), solver->MakeSum(solver->MakeProd(var, due), solver->MakeProd(solver->MakeDifference(1,var),214748364))));
+      solver->AddConstraint(solver->MakeGreaterOrEqual(routing.SlackVar(index,kTime), solver->MakeProd(var,service)));
       isBreak.push_back(var);
     }
     solver->AddConstraint(solver->MakeEquality(solver->MakeSum(isBreak),1));
