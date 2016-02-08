@@ -47,8 +47,11 @@ void TSPTWSolver(const TSPTWDataDT & data) {
   const int64 horizon = data.Horizon();
   routing.AddDimension(NewPermanentCallback(&data, &TSPTWDataDT::TimePlusServiceTime),
     horizon, horizon, true, "time");
+  routing.AddDimension(NewPermanentCallback(&data, &TSPTWDataDT::TimeOrder),
+    horizon, horizon, true, "order");
 
   routing.GetMutableDimension("time")->SetSpanCostCoefficientForAllVehicles(5);
+  routing.GetMutableDimension("order")->SetSpanCostCoefficientForAllVehicles(1);
 
   //  Setting time windows
   for (RoutingModel::NodeIndex i(1); i < size_matrix - 1; ++i) {
