@@ -77,6 +77,38 @@ void TWBuilder(const TSPTWDataDT &data, RoutingModel &routing, Solver *solver, i
   }
 }
 
+vector<IntVar*> RestBuilder(const TSPTWDataDT &data, RoutingModel &routing, Solver *solver, int64 begin_index, int64 size, int64 rest_begin, int64 rest_size) {
+  std::vector<IntVar*> breaks;
+  for(RoutingModel::NodeIndex rest(rest_begin); rest < rest_begin + rest_size; ++rest) {
+    IntVar* break_position = solver->MakeIntVar(begin_index, size, "break position");
+    breaks.push_back(break_position);
+    int64 const rest_ready = data.FirstTWReadyTime(rest);
+    int64 const rest_due = data.FirstTWDueTime(rest);
+
+    for (RoutingModel::NodeIndex i(begin_index); i < begin_index + size; ++i) {
+      int64 index = routing.NodeToIndex(i);
+
+      IntVar *const cumul_var = routing.CumulVar(index, "time");
+      IntVar *const transit_var = routing.TransitVar(index, "time");
+      IntVar *const slack_var = routing.SlackVar(index, "time");
+
+      // Define break_time if the break position is equal to the current node
+      IntVar *const break_time = solver->MakeConditionalExpression(solver->MakeIsEqualCstVar(break_position, index)->Var(),
+        solver->MakeIntConst(data.ServiceTime(rest)), 0)->Var();
+
+      // Add a waiting_time before the break if its timeWindow in not already open
+      IntVar *const break_wait_time = solver->MakeConditionalExpression(solver->MakeIsEqualCstVar(break_position, index)->Var(),
+        solver->MakeMax(solver->MakeDifference(rest_ready, solver->MakeSum(cumul_var, transit_var)), 0), 0)->Var();
+
+      // Associate the break position accordingly to is TW
+      solver->AddConstraint(solver->MakeGreaterOrEqual(slack_var, solver->MakeSum(break_wait_time, break_time)));
+      routing.SetCumulVarSoftUpperBound(i, "time", rest_due, 10000000);
+    }
+    routing.AddToAssignment(break_position);
+  }
+  return breaks;
+}
+
 void TSPTWSolver(const TSPTWDataDT &data) {
 
   const int size = data.Size();
@@ -85,7 +117,7 @@ void TSPTWSolver(const TSPTWDataDT &data) {
 
   std::vector<std::pair<RoutingModel::NodeIndex, RoutingModel::NodeIndex>> *start_ends = new std::vector<std::pair<RoutingModel::NodeIndex, RoutingModel::NodeIndex>>(1);
   (*start_ends)[0] = std::make_pair(data.Start(), data.Stop());
-  RoutingModel routing(size, 1, *start_ends);
+  RoutingModel routing(size - size_rest, 1, *start_ends);
 
   const int64 horizon = data.Horizon();
   routing.AddDimension(NewPermanentCallback(&data, &TSPTWDataDT::TimePlusServiceTime), horizon, horizon, true, "time");
@@ -104,7 +136,7 @@ void TSPTWSolver(const TSPTWDataDT &data) {
   TWBuilder(data, routing, solver, 1, size_matrix - 2);
 
   // Setting rest time windows
-  TWBuilder(data, routing, solver, size_matrix, size_rest);
+  std::vector<IntVar*> breaks = RestBuilder(data, routing, solver, 1, size_matrix - 1 - size_rest, size_matrix, size_rest);
 
   RoutingSearchParameters parameters = BuildSearchParametersFromFlags();
 
@@ -158,7 +190,11 @@ void TSPTWSolver(const TSPTWDataDT &data) {
     for (int route_nbr = 0; route_nbr < routing.vehicles(); route_nbr++) {
       for (int64 index = routing.Start(route_nbr); !routing.IsEnd(index); index = solution->Value(routing.NextVar(index))) {
         RoutingModel::NodeIndex nodeIndex = routing.IndexToNode(index);
-        std::cout << nodeIndex << " ";
+        std::cout << nodeIndex << " " ;
+        for (int64 current_break = 0; current_break < breaks.size(); current_break++) {
+          if(solution->Value(breaks[current_break]) == nodeIndex)
+            std::cout << size - size_rest + current_break << " ";
+        }
       }
       std::cout << routing.IndexToNode(routing.End(route_nbr)) << std::endl;
     }
