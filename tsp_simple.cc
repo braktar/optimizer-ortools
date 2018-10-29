@@ -24,6 +24,7 @@
 #include <ortools/base/callback.h>
 
 #include "tsptw_data_dt.h"
+#include "filters.h"
 #include "limits.h"
 
 #include "ortools/constraint_solver/routing.h"
@@ -36,6 +37,7 @@ DEFINE_int64(time_out_multiplier, 2, "Multiplier for the nexts time out");
 DEFINE_int64(vehicle_limit, 0, "Define the maximum number of vehicle");
 DEFINE_int64(solver_parameter, -1, "Force a particular behavior");
 DEFINE_bool(only_first_solution, false, "Compute only the first solution");
+DEFINE_int64(neighbourhood, -1, "Size of the neighbourhood");
 DEFINE_bool(balance, false, "Route balancing");
 DEFINE_bool(nearby, false, "Short segment priority");
 DEFINE_bool(debug, false, "debug display");
@@ -684,6 +686,7 @@ int TSPTWSolver(const TSPTWDataDT &data, std::string filename) {
   // Setting visit time windows
   MissionsBuilder(data, routing, solver, size - 2, min_start, loop_route, unique_configuration);
   RelationBuilder(data, routing, solver, size, assignment, has_overall_duration);
+  DomainFilters(data, routing, solver, assignment, FLAGS_neighbourhood);
   RoutingSearchParameters parameters = BuildSearchParametersFromFlags();
 
   // Search strategy
