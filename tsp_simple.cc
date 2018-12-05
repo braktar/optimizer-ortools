@@ -799,6 +799,12 @@ int TSPTWSolver(const TSPTWDataDT &data, std::string filename) {
   }
 
   if (solution != NULL) {
+
+    std::cout << std::endl;
+    std::cout << "Solutions: " << solver->solutions() << std::endl;
+    std::cout << "Failures: " << solver->failures() << std::endl;
+    std::cout << "Branches: " << solver->branches() << std::endl;
+    std::cout << "Wall time: " << solver->wall_time() << "ms" << std::endl;
     if (result.routes_size() > 0) result.clear_routes();
     for (int route_nbr = 0; route_nbr < routing.vehicles(); route_nbr++) {
       ortools_result::Route* route = result.add_routes();
