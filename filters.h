@@ -335,12 +335,35 @@ void BreakVehicleTypeSymmetry(const TSPTWDataDT &data, RoutingModel &routing, So
   }
 }
 
+void LinkDecisionVariables(const TSPTWDataDT &data, RoutingModel &routing, Solver *solver) {
+  const int size_problem = data.SizeProblem();
+  int64 size_vehicles = data.Vehicles().size();
+  int64 size_rests = data.SizeRest();
+  int64 size_missions = data.SizeMissions();
+  int64 big_m = size_vehicles * 2 + size_rests + size_missions;
+  RoutingModel::NodeIndex l(0);
+  for (int activity = 0; activity <= size_problem; ++activity) {
+    int32 alternative_size = data.AlternativeSize(activity);
+    for (int alternative = 0; alternative < alternative_size; ++alternative) {
+      int64 index = routing.NodeToIndex(l);
+      IntVar *const active_var = routing.ActiveVar(index);
+      IntVar *const next_var = routing.NextVar(index);
+      IntVar *const vehicle_var = routing.VehicleVar(index);
+
+      IntVar *link_var = solver->MakeSum(solver->MakeProd(vehicle_var, big_m)->Var(), next_var)->Var();
+      solver->AddConstraint(solver->MakeLessOrEqual(link_var, 100 * size_vehicles + size_missions));
+      ++l;
+    }
+  }
+}
+
 void DomainFilters(const TSPTWDataDT &data, RoutingModel &routing, Solver *solver, Assignment *assignment, int64 neighbourhood, int64 deviation) {
   CapacityFilter(data, routing, solver, assignment);
   NeighbourFilter(data, routing, solver, assignment, neighbourhood);
   CardinalityFilter(data, routing, solver, assignment);
   SolutionVectorFilter(data, routing, solver, assignment, deviation);
   BreakVehicleTypeSymmetry(data, routing, solver);
+  LinkDecisionVariables(data, routing, solver);
 }
 
 }
