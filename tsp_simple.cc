@@ -757,6 +757,7 @@ int TSPTWSolver(const TSPTWDataDT &data, std::string filename) {
   // parameters.set_first_solution_strategy(FirstSolutionStrategy::ROUTING_BEST_INSERTION);
 
   // parameters.set_local_search_metaheuristic(LocalSearchMetaheuristic::GREEDY_DESCENT);
+  parameters.set_local_search_metaheuristic(LocalSearchMetaheuristic::GUIDED_LOCAL_SEARCH);
   // parameters.set_guided_local_search_lambda_coefficient(0.5);
   // parameters.set_local_search_metaheuristic(LocalSearchMetaheuristic::SIMULATED_ANNEALING);
   // parameters.set_local_search_metaheuristic(LocalSearchMetaheuristic::TABU_SEARCH);
